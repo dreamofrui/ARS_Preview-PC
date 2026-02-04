@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
         self._big_dialog: Optional[BigImageDialog] = None
 
         # State
-        self._showing_timeout = False
+        self._timed_out_indices = set()  # Track which image indices (0-based) have timed out in current batch
         self._current_timeout_image = None  # Store current timeout image
         self._waiting_for_key_after_timeout = False  # True when timeout occurred, waiting for N/M key
 
@@ -351,8 +351,8 @@ class MainWindow(QMainWindow):
         pixmaps = []
 
         for i in range(self._batch.batch_count):
-            if i == current and self._showing_timeout and self._current_timeout_image:
-                # Only the current (timed out) image shows timeout image
+            if i in self._timed_out_indices and self._current_timeout_image:
+                # Timed out images show timeout image
                 pixmaps.append(self._current_timeout_image)
             elif i < current:
                 # Already processed - show normal image
@@ -406,7 +406,7 @@ class MainWindow(QMainWindow):
         self._batch.set_batch_count(count)
         self._batch.start_batch()
         # Reset all states for new batch
-        self._showing_timeout = False
+        self._timed_out_indices.clear()
         self._current_timeout_image = None
         self._waiting_for_key_after_timeout = False
         self._update_display()
@@ -433,7 +433,7 @@ class MainWindow(QMainWindow):
         """Handle stop button clicked"""
         self._batch.stop()
         self._timeout.stop()
-        self._showing_timeout = False
+        self._timed_out_indices.clear()
         self._current_timeout_image = None
         self._waiting_for_key_after_timeout = False
 
@@ -457,7 +457,7 @@ class MainWindow(QMainWindow):
         """Update big dialog image if visible"""
         if self._big_dialog and self._big_dialog.isVisible():
             current = self._batch.current_image - 1
-            if self._showing_timeout and self._current_timeout_image:
+            if current in self._timed_out_indices and self._current_timeout_image:
                 pixmap = self._current_timeout_image
             else:
                 pixmap = self._image_loader.get_normal_image(current)
@@ -467,7 +467,9 @@ class MainWindow(QMainWindow):
         """Show timeout replacement image"""
         pixmap = self._image_loader.get_random_timeout_image()
         self._current_timeout_image = pixmap
-        self._showing_timeout = True
+        # Mark current image index as timed out (0-based)
+        current = self._batch.current_image - 1
+        self._timed_out_indices.add(current)
 
         # Update big dialog if visible
         if pixmap and self._big_dialog and self._big_dialog.isVisible():
