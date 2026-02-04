@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
         self._showing_wait = False
         self._showing_timeout = False
         self._current_timeout_image = None  # Store current timeout image
+        self._waiting_for_key_after_timeout = False  # True when timeout occurred, waiting for N/M key
 
         # Countdown timer for timeout display
         self._countdown_timer = QTimer(self)
@@ -237,6 +238,7 @@ class MainWindow(QMainWindow):
         # Reset timeout state when image changes
         self._showing_timeout = False
         self._current_timeout_image = None
+        self._waiting_for_key_after_timeout = False
         self._update_display()
         self._timeout.start()
 
@@ -250,14 +252,23 @@ class MainWindow(QMainWindow):
         self._show_batch_complete_dialog(batch_num, ok, ng)
 
     def _on_timeout(self) -> None:
-        """Handle timeout"""
+        """Handle timeout - show timeout image and wait for key press"""
         current = self._batch.current_image
         self._logger.log_timeout(current, self._timeout._current_duration, "timeout image")
         self._show_timeout_image()
-        self._batch.process_timeout()
+        # Set flag to wait for user key press - don't advance automatically
+        self._waiting_for_key_after_timeout = True
+        # Stop the timeout timer so it doesn't trigger again
+        self._timeout.stop()
+        # Update status to show we're in timeout state
+        self._update_status()
 
     def _on_key_processed(self, detail: str) -> None:
         """Handle key processed"""
+        # If we were waiting after timeout, advance the image (counts as NG)
+        if self._waiting_for_key_after_timeout:
+            self._waiting_for_key_after_timeout = False
+            self._batch.process_timeout()
         self._logger.log_key("", detail)
         self._timeout.stop()
 
@@ -364,6 +375,7 @@ class MainWindow(QMainWindow):
         self._showing_wait = False
         self._showing_timeout = False
         self._current_timeout_image = None
+        self._waiting_for_key_after_timeout = False
 
     def _open_big_image(self) -> None:
         """Open big image dialog"""
