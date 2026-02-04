@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QComboBox, QFrame, QMessageBox, QDialog
+    QLabel, QPushButton, QComboBox, QFrame, QMessageBox, QDialog, QLineEdit
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QKeyEvent, QPixmap
@@ -125,8 +125,24 @@ class MainWindow(QMainWindow):
         self._batch_combo.addItems([str(i) for i in range(7)])
         self._batch_combo.setCurrentIndex(6)  # Default to 6
         batch_row.addWidget(self._batch_combo)
+
+        # Mode selection
+        batch_row.addWidget(QLabel(" | 模式:"))
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItems(["固定模式", "轮询模式"])
+        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        batch_row.addWidget(self._mode_combo)
+
         batch_row.addStretch()
         layout.addLayout(batch_row)
+
+        # Cycling sequence row (hidden by default)
+        sequence_row = QHBoxLayout()
+        sequence_row.addWidget(QLabel("轮询序列:"))
+        self._sequence_edit = QLineEdit("1,2,3,4,5,6")
+        self._sequence_edit.setEnabled(False)
+        sequence_row.addWidget(self._sequence_edit)
+        layout.addLayout(sequence_row)
 
         # Flow control row
         flow_row = QHBoxLayout()
@@ -336,6 +352,11 @@ class MainWindow(QMainWindow):
 
     def _on_start_clicked(self) -> None:
         """Handle start button clicked"""
+        # Apply cycling mode settings
+        is_cycling = self._mode_combo.currentIndex() == 1  # 1 = 轮询模式
+        sequence = self._sequence_edit.text() if is_cycling else None
+        self._batch.set_cycling_mode(is_cycling, sequence)
+
         # Get batch count from combo - use exactly what user selected
         count = int(self._batch_combo.currentText())
 
@@ -346,6 +367,13 @@ class MainWindow(QMainWindow):
         self._update_display()
         self._timeout.start()
         self._logger.log_batch_start(self._batch.batch_num, count)
+
+    def _on_mode_changed(self, index: int) -> None:
+        """Handle mode selection change"""
+        if index == 1:  # 轮询模式
+            self._sequence_edit.setEnabled(True)
+        else:  # 固定模式
+            self._sequence_edit.setEnabled(False)
 
     def _on_pause_clicked(self) -> None:
         """Handle pause/resume button clicked"""
