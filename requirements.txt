@@ -1,4 +1,6 @@
+#使用D:/miniforge3/envs/ars_autogui/python.exe作为解释器
 PyQt6==6.6.1
 PyQt6-Qt6==6.6.1
 pytest==7.4.3
 pytest-qt==4.2.0
+Pillow==10.1.0
