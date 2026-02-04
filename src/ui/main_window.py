@@ -54,7 +54,6 @@ class MainWindow(QMainWindow):
         self._big_dialog: Optional[BigImageDialog] = None
 
         # State
-        self._showing_wait = False
         self._showing_timeout = False
         self._current_timeout_image = None  # Store current timeout image
         self._waiting_for_key_after_timeout = False  # True when timeout occurred, waiting for N/M key
@@ -151,14 +150,6 @@ class MainWindow(QMainWindow):
         self._big_image_btn = QPushButton("Open Big Image")
         self._big_image_btn.clicked.connect(self._open_big_image)
         view_row.addWidget(self._big_image_btn)
-
-        self._normal_btn = QPushButton("Normal")
-        self._normal_btn.clicked.connect(lambda: self._set_image_mode(False))
-        view_row.addWidget(self._normal_btn)
-
-        self._wait_btn = QPushButton("Wait")
-        self._wait_btn.clicked.connect(lambda: self._set_image_mode(True))
-        view_row.addWidget(self._wait_btn)
         layout.addLayout(view_row)
 
         # Injection row
@@ -308,8 +299,6 @@ class MainWindow(QMainWindow):
                 if self._showing_timeout and self._current_timeout_image:
                     # Show timeout image
                     pixmaps.append(self._current_timeout_image)
-                elif self._showing_wait:
-                    pixmaps.append(self._image_loader.get_wait_image())
                 else:
                     pixmaps.append(self._image_loader.get_normal_image(i))
             else:
@@ -352,7 +341,6 @@ class MainWindow(QMainWindow):
 
         self._batch.set_batch_count(count)
         self._batch.start_batch()
-        self._showing_wait = False
         self._showing_timeout = False
         self._current_timeout_image = None
         self._update_display()
@@ -372,7 +360,6 @@ class MainWindow(QMainWindow):
         """Handle stop button clicked"""
         self._batch.stop()
         self._timeout.stop()
-        self._showing_wait = False
         self._showing_timeout = False
         self._current_timeout_image = None
         self._waiting_for_key_after_timeout = False
@@ -399,16 +386,9 @@ class MainWindow(QMainWindow):
             current = self._batch.current_image - 1
             if self._showing_timeout and self._current_timeout_image:
                 pixmap = self._current_timeout_image
-            elif self._showing_wait:
-                pixmap = self._image_loader.get_wait_image()
             else:
                 pixmap = self._image_loader.get_normal_image(current)
             self._big_dialog.set_image(pixmap)
-
-    def _set_image_mode(self, show_wait: bool) -> None:
-        """Set image display mode"""
-        self._showing_wait = show_wait
-        self._update_display()
 
     def _show_timeout_image(self) -> None:
         """Show timeout replacement image"""
