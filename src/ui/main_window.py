@@ -113,16 +113,17 @@ class MainWindow(QMainWindow):
     def _create_control_panel(self) -> QFrame:
         """Create control panel"""
         panel = QFrame()
-        panel.setFixedHeight(140)
+        panel.setFixedHeight(180)
         panel.setStyleSheet("""
             QFrame { background-color: #2d2d2d; }
-            QLabel { color: white; font-size: 14px; }
+            QLabel { color: white; font-size: 13px; }
             QPushButton {
                 background-color: #4a4a4a;
                 color: white;
                 border: 1px solid #5a5a5a;
-                padding: 5px 15px;
+                padding: 6px 18px;
                 border-radius: 4px;
+                min-width: 70px;
             }
             QPushButton:hover { background-color: #5a5a5a; }
             QPushButton:disabled { background-color: #3a3a3a; color: #6a6a6a; }
@@ -130,8 +131,9 @@ class MainWindow(QMainWindow):
                 background-color: #4a4a4a;
                 color: white;
                 border: 1px solid #5a5a5a;
-                padding: 5px;
+                padding: 5px 10px;
                 border-radius: 4px;
+                min-width: 60px;
             }
             QComboBox QAbstractItemView {
                 background-color: #4a4a4a;
@@ -142,15 +144,18 @@ class MainWindow(QMainWindow):
                 background-color: #4a4a4a;
                 color: white;
                 border: 1px solid #5a5a5a;
-                padding: 5px;
+                padding: 5px 10px;
                 border-radius: 4px;
+                min-width: 150px;
             }
         """)
 
         layout = QVBoxLayout(panel)
+        layout.setSpacing(8)
 
         # Batch settings row
         batch_row = QHBoxLayout()
+        batch_row.setSpacing(15)
         batch_row.addWidget(QLabel("批次数量:"))
         self._batch_combo = QComboBox()
         self._batch_combo.addItems([str(i) for i in range(7)])
@@ -158,7 +163,8 @@ class MainWindow(QMainWindow):
         batch_row.addWidget(self._batch_combo)
 
         # Mode selection
-        batch_row.addWidget(QLabel(" | 模式:"))
+        batch_row.addSpacing(20)
+        batch_row.addWidget(QLabel("模式:"))
         self._mode_combo = QComboBox()
         self._mode_combo.addItems(["固定模式", "轮询模式"])
         self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
@@ -169,14 +175,17 @@ class MainWindow(QMainWindow):
 
         # Cycling sequence row (hidden by default)
         sequence_row = QHBoxLayout()
+        sequence_row.setSpacing(15)
         sequence_row.addWidget(QLabel("轮询序列:"))
         self._sequence_edit = QLineEdit("1,2,3,4,5,6")
         self._sequence_edit.setEnabled(False)
         sequence_row.addWidget(self._sequence_edit)
+        sequence_row.addStretch()
         layout.addLayout(sequence_row)
 
         # Flow control row
         flow_row = QHBoxLayout()
+        flow_row.setSpacing(15)
         self._start_btn = QPushButton("Start")
         self._start_btn.clicked.connect(self._on_start_clicked)
         flow_row.addWidget(self._start_btn)
@@ -194,13 +203,16 @@ class MainWindow(QMainWindow):
 
         # View control row
         view_row = QHBoxLayout()
+        view_row.setSpacing(15)
         self._big_image_btn = QPushButton("Open Big Image")
         self._big_image_btn.clicked.connect(self._open_big_image)
         view_row.addWidget(self._big_image_btn)
+        view_row.addStretch()
         layout.addLayout(view_row)
 
         # Injection row
         inject_row = QHBoxLayout()
+        inject_row.setSpacing(15)
         self._lag_btn = QPushButton("Inject Lag")
         self._lag_btn.clicked.connect(self._inject_lag)
         inject_row.addWidget(self._lag_btn)
@@ -216,6 +228,7 @@ class MainWindow(QMainWindow):
         self._hide_btn = QPushButton("Hide")
         self._hide_btn.clicked.connect(self._hide_to_tray)
         inject_row.addWidget(self._hide_btn)
+        inject_row.addStretch()
         layout.addLayout(inject_row)
 
         return panel
@@ -338,8 +351,8 @@ class MainWindow(QMainWindow):
         pixmaps = []
 
         for i in range(self._batch.batch_count):
-            if self._showing_timeout and self._current_timeout_image:
-                # Timeout state: all images show timeout image
+            if i == current and self._showing_timeout and self._current_timeout_image:
+                # Only the current (timed out) image shows timeout image
                 pixmaps.append(self._current_timeout_image)
             elif i < current:
                 # Already processed - show normal image
@@ -392,8 +405,10 @@ class MainWindow(QMainWindow):
 
         self._batch.set_batch_count(count)
         self._batch.start_batch()
+        # Reset all states for new batch
         self._showing_timeout = False
         self._current_timeout_image = None
+        self._waiting_for_key_after_timeout = False
         self._update_display()
         self._timeout.start()
         self._logger.log_batch_start(self._batch.batch_num, count)
