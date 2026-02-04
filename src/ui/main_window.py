@@ -114,7 +114,38 @@ class MainWindow(QMainWindow):
         """Create control panel"""
         panel = QFrame()
         panel.setFixedHeight(140)
-        panel.setStyleSheet("QFrame { background-color: #2d2d2d; }")
+        panel.setStyleSheet("""
+            QFrame { background-color: #2d2d2d; }
+            QLabel { color: white; font-size: 14px; }
+            QPushButton {
+                background-color: #4a4a4a;
+                color: white;
+                border: 1px solid #5a5a5a;
+                padding: 5px 15px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #5a5a5a; }
+            QPushButton:disabled { background-color: #3a3a3a; color: #6a6a6a; }
+            QComboBox {
+                background-color: #4a4a4a;
+                color: white;
+                border: 1px solid #5a5a5a;
+                padding: 5px;
+                border-radius: 4px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #4a4a4a;
+                color: white;
+                selection-background-color: #5a5a5a;
+            }
+            QLineEdit {
+                background-color: #4a4a4a;
+                color: white;
+                border: 1px solid #5a5a5a;
+                padding: 5px;
+                border-radius: 4px;
+            }
+        """)
 
         layout = QVBoxLayout(panel)
 
@@ -242,9 +273,7 @@ class MainWindow(QMainWindow):
 
     def _on_image_changed(self, current: int, total: int) -> None:
         """Handle image change"""
-        # Reset timeout state when image changes
-        self._showing_timeout = False
-        self._current_timeout_image = None
+        # Clear waiting flag (but keep timeout image visible)
         self._waiting_for_key_after_timeout = False
         self._update_display()
         self._timeout.start()
@@ -278,6 +307,8 @@ class MainWindow(QMainWindow):
             self._batch.process_timeout()
         self._logger.log_key("", detail)
         self._timeout.stop()
+        # Restart timeout for next image
+        self._timeout.start()
 
     def _on_grid_image_clicked(self, index: int) -> None:
         """Handle grid image clicked"""
@@ -307,16 +338,15 @@ class MainWindow(QMainWindow):
         pixmaps = []
 
         for i in range(self._batch.batch_count):
-            if i < current:
+            if self._showing_timeout and self._current_timeout_image:
+                # Timeout state: all images show timeout image
+                pixmaps.append(self._current_timeout_image)
+            elif i < current:
                 # Already processed - show normal image
                 pixmaps.append(self._image_loader.get_normal_image(i))
             elif i == current:
-                # Current image - check what to show
-                if self._showing_timeout and self._current_timeout_image:
-                    # Show timeout image
-                    pixmaps.append(self._current_timeout_image)
-                else:
-                    pixmaps.append(self._image_loader.get_normal_image(i))
+                # Current image
+                pixmaps.append(self._image_loader.get_normal_image(i))
             else:
                 # Future images - show wait image
                 pixmaps.append(self._image_loader.get_wait_image())
