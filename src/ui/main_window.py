@@ -55,6 +55,8 @@ class MainWindow(QMainWindow):
 
         # State
         self._showing_wait = False
+        self._showing_timeout = False
+        self._current_timeout_image = None  # Store current timeout image
 
         # Countdown timer for timeout display
         self._countdown_timer = QTimer(self)
@@ -232,6 +234,9 @@ class MainWindow(QMainWindow):
 
     def _on_image_changed(self, current: int, total: int) -> None:
         """Handle image change"""
+        # Reset timeout state when image changes
+        self._showing_timeout = False
+        self._current_timeout_image = None
         self._update_display()
         self._timeout.start()
 
@@ -288,8 +293,11 @@ class MainWindow(QMainWindow):
                 # Already processed - show normal image
                 pixmaps.append(self._image_loader.get_normal_image(i))
             elif i == current:
-                # Current image
-                if self._showing_wait:
+                # Current image - check what to show
+                if self._showing_timeout and self._current_timeout_image:
+                    # Show timeout image
+                    pixmaps.append(self._current_timeout_image)
+                elif self._showing_wait:
                     pixmaps.append(self._image_loader.get_wait_image())
                 else:
                     pixmaps.append(self._image_loader.get_normal_image(i))
@@ -303,8 +311,20 @@ class MainWindow(QMainWindow):
         """Update button states"""
         state = self._batch.state
         self._start_btn.setEnabled(state == BatchState.IDLE)
-        self._pause_btn.setEnabled(state == BatchState.RUNNING)
-        self._stop_btn.setEnabled(state in [BatchState.RUNNING, BatchState.PAUSED])
+
+        # Pause/Resume button
+        if state == BatchState.RUNNING:
+            self._pause_btn.setText("Pause")
+            self._pause_btn.setEnabled(True)
+        elif state == BatchState.PAUSED:
+            self._pause_btn.setText("Resume")
+            self._pause_btn.setEnabled(True)
+        else:
+            self._pause_btn.setText("Pause")
+            self._pause_btn.setEnabled(False)
+
+        # Stop button - enabled in RUNNING, PAUSED, or WAITING_CONFIRM
+        self._stop_btn.setEnabled(state in [BatchState.RUNNING, BatchState.PAUSED, BatchState.WAITING_CONFIRM])
 
     def _update_countdown(self) -> None:
         """Update countdown display"""
@@ -315,23 +335,43 @@ class MainWindow(QMainWindow):
 
     def _on_start_clicked(self) -> None:
         """Handle start button clicked"""
-        count = int(self._batch_combo.currentText())
+        # Get base count from combo
+        base_count = int(self._batch_combo.currentText())
+
+        # If base_count is 6 (default), use cycling mode (1,2,3,1,2,3,...)
+        # Otherwise use the fixed count the user selected
+        if base_count == 6:
+            # Cycling mode: batch_num 1->1, 2->2, 3->3, 4->1, 5->2, 6->3, ...
+            cycle_position = (self._batch.batch_num - 1) % 3
+            count = cycle_position + 1  # 1, 2, 3, 1, 2, 3, ...
+        else:
+            count = base_count
+
         self._batch.set_batch_count(count)
         self._batch.start_batch()
         self._showing_wait = False
+        self._showing_timeout = False
+        self._current_timeout_image = None
         self._update_display()
         self._timeout.start()
         self._logger.log_batch_start(self._batch.batch_num, count)
 
     def _on_pause_clicked(self) -> None:
-        """Handle pause button clicked"""
-        self._batch.pause()
+        """Handle pause/resume button clicked"""
+        if self._batch.state == BatchState.RUNNING:
+            self._batch.pause()
+            self._timeout.stop()
+        elif self._batch.state == BatchState.PAUSED:
+            self._batch.resume()
+            self._timeout.start()
 
     def _on_stop_clicked(self) -> None:
         """Handle stop button clicked"""
         self._batch.stop()
         self._timeout.stop()
         self._showing_wait = False
+        self._showing_timeout = False
+        self._current_timeout_image = None
 
     def _open_big_image(self) -> None:
         """Open big image dialog"""
@@ -357,10 +397,14 @@ class MainWindow(QMainWindow):
     def _show_timeout_image(self) -> None:
         """Show timeout replacement image"""
         pixmap = self._image_loader.get_random_timeout_image()
+        self._current_timeout_image = pixmap
+        self._showing_timeout = True
+
+        # Update big dialog if visible
         if pixmap and self._big_dialog and self._big_dialog.isVisible():
             self._big_dialog.set_image(pixmap)
+
         # Update grid to show timeout image
-        self._showing_wait = True
         self._update_display()
 
     def _show_batch_complete_dialog(self, batch_num: int, ok: int, ng: int) -> None:
