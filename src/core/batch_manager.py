@@ -35,6 +35,10 @@ class BatchManager(QObject):
         self._ng_count = 0
         self._timeout_count = 0
 
+        # Batch cycling mode
+        self._use_cycling_sequence = False
+        self._batch_sequence = [1, 2, 3, 4, 5, 6]  # Default sequence
+
     @property
     def state(self) -> BatchState:
         """Get current state"""
@@ -74,10 +78,29 @@ class BatchManager(QObject):
         """Set batch size (0-6)"""
         self._batch_count = max(0, min(6, count))
 
+    def set_cycling_mode(self, enabled: bool, sequence: str = None) -> None:
+        """Set cycling mode and sequence"""
+        self._use_cycling_sequence = enabled
+        if sequence:
+            self._batch_sequence = self._parse_sequence(sequence)
+
+    def _parse_sequence(self, sequence_str: str) -> list:
+        """Parse sequence string '1,2,3' -> [1, 2, 3]"""
+        return [int(x.strip()) for x in sequence_str.split(',')]
+
+    def _calculate_batch_count(self) -> int:
+        """Calculate current batch count based on mode"""
+        if not self._use_cycling_sequence:
+            return self._batch_count
+        index = (self._batch_num - 1) % len(self._batch_sequence)
+        return self._batch_sequence[index]
+
     def start_batch(self) -> None:
         """Start a new batch"""
         self._batch_num += 1
         self._current_image = 0
+        # Calculate batch count based on mode (fixed or cycling)
+        self._batch_count = self._calculate_batch_count()
         self._set_state(BatchState.RUNNING)
         self.image_changed.emit(1, self._batch_count)
 
