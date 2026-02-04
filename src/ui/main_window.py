@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QComboBox, QFrame, QMessageBox, QDialog
+    QLabel, QPushButton, QComboBox, QFrame, QMessageBox, QDialog, QLineEdit
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QKeyEvent, QPixmap
@@ -54,9 +54,9 @@ class MainWindow(QMainWindow):
         self._big_dialog: Optional[BigImageDialog] = None
 
         # State
-        self._showing_wait = False
         self._showing_timeout = False
         self._current_timeout_image = None  # Store current timeout image
+        self._waiting_for_key_after_timeout = False  # True when timeout occurred, waiting for N/M key
 
         # Countdown timer for timeout display
         self._countdown_timer = QTimer(self)
@@ -125,8 +125,24 @@ class MainWindow(QMainWindow):
         self._batch_combo.addItems([str(i) for i in range(7)])
         self._batch_combo.setCurrentIndex(6)  # Default to 6
         batch_row.addWidget(self._batch_combo)
+
+        # Mode selection
+        batch_row.addWidget(QLabel(" | 模式:"))
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItems(["固定模式", "轮询模式"])
+        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        batch_row.addWidget(self._mode_combo)
+
         batch_row.addStretch()
         layout.addLayout(batch_row)
+
+        # Cycling sequence row (hidden by default)
+        sequence_row = QHBoxLayout()
+        sequence_row.addWidget(QLabel("轮询序列:"))
+        self._sequence_edit = QLineEdit("1,2,3,4,5,6")
+        self._sequence_edit.setEnabled(False)
+        sequence_row.addWidget(self._sequence_edit)
+        layout.addLayout(sequence_row)
 
         # Flow control row
         flow_row = QHBoxLayout()
@@ -150,14 +166,6 @@ class MainWindow(QMainWindow):
         self._big_image_btn = QPushButton("Open Big Image")
         self._big_image_btn.clicked.connect(self._open_big_image)
         view_row.addWidget(self._big_image_btn)
-
-        self._normal_btn = QPushButton("Normal")
-        self._normal_btn.clicked.connect(lambda: self._set_image_mode(False))
-        view_row.addWidget(self._normal_btn)
-
-        self._wait_btn = QPushButton("Wait")
-        self._wait_btn.clicked.connect(lambda: self._set_image_mode(True))
-        view_row.addWidget(self._wait_btn)
         layout.addLayout(view_row)
 
         # Injection row
@@ -237,6 +245,7 @@ class MainWindow(QMainWindow):
         # Reset timeout state when image changes
         self._showing_timeout = False
         self._current_timeout_image = None
+        self._waiting_for_key_after_timeout = False
         self._update_display()
         self._timeout.start()
 
@@ -250,14 +259,23 @@ class MainWindow(QMainWindow):
         self._show_batch_complete_dialog(batch_num, ok, ng)
 
     def _on_timeout(self) -> None:
-        """Handle timeout"""
+        """Handle timeout - show timeout image and wait for key press"""
         current = self._batch.current_image
         self._logger.log_timeout(current, self._timeout._current_duration, "timeout image")
         self._show_timeout_image()
-        self._batch.process_timeout()
+        # Set flag to wait for user key press - don't advance automatically
+        self._waiting_for_key_after_timeout = True
+        # Stop the timeout timer so it doesn't trigger again
+        self._timeout.stop()
+        # Update status to show we're in timeout state
+        self._update_status()
 
     def _on_key_processed(self, detail: str) -> None:
         """Handle key processed"""
+        # If we were waiting after timeout, advance the image (counts as NG)
+        if self._waiting_for_key_after_timeout:
+            self._waiting_for_key_after_timeout = False
+            self._batch.process_timeout()
         self._logger.log_key("", detail)
         self._timeout.stop()
 
@@ -297,8 +315,6 @@ class MainWindow(QMainWindow):
                 if self._showing_timeout and self._current_timeout_image:
                     # Show timeout image
                     pixmaps.append(self._current_timeout_image)
-                elif self._showing_wait:
-                    pixmaps.append(self._image_loader.get_wait_image())
                 else:
                     pixmaps.append(self._image_loader.get_normal_image(i))
             else:
@@ -336,17 +352,28 @@ class MainWindow(QMainWindow):
 
     def _on_start_clicked(self) -> None:
         """Handle start button clicked"""
+        # Apply cycling mode settings
+        is_cycling = self._mode_combo.currentIndex() == 1  # 1 = 轮询模式
+        sequence = self._sequence_edit.text() if is_cycling else None
+        self._batch.set_cycling_mode(is_cycling, sequence)
+
         # Get batch count from combo - use exactly what user selected
         count = int(self._batch_combo.currentText())
 
         self._batch.set_batch_count(count)
         self._batch.start_batch()
-        self._showing_wait = False
         self._showing_timeout = False
         self._current_timeout_image = None
         self._update_display()
         self._timeout.start()
         self._logger.log_batch_start(self._batch.batch_num, count)
+
+    def _on_mode_changed(self, index: int) -> None:
+        """Handle mode selection change"""
+        if index == 1:  # 轮询模式
+            self._sequence_edit.setEnabled(True)
+        else:  # 固定模式
+            self._sequence_edit.setEnabled(False)
 
     def _on_pause_clicked(self) -> None:
         """Handle pause/resume button clicked"""
@@ -361,9 +388,9 @@ class MainWindow(QMainWindow):
         """Handle stop button clicked"""
         self._batch.stop()
         self._timeout.stop()
-        self._showing_wait = False
         self._showing_timeout = False
         self._current_timeout_image = None
+        self._waiting_for_key_after_timeout = False
 
     def _open_big_image(self) -> None:
         """Open big image dialog"""
@@ -387,16 +414,9 @@ class MainWindow(QMainWindow):
             current = self._batch.current_image - 1
             if self._showing_timeout and self._current_timeout_image:
                 pixmap = self._current_timeout_image
-            elif self._showing_wait:
-                pixmap = self._image_loader.get_wait_image()
             else:
                 pixmap = self._image_loader.get_normal_image(current)
             self._big_dialog.set_image(pixmap)
-
-    def _set_image_mode(self, show_wait: bool) -> None:
-        """Set image display mode"""
-        self._showing_wait = show_wait
-        self._update_display()
 
     def _show_timeout_image(self) -> None:
         """Show timeout replacement image"""
