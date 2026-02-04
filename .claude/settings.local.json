@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(\"D:\\\\miniforge3\\\\envs\\\\ars_autogui\\\\python.exe\" -m pip show:*)",
+      "Bash(\"D:\\\\miniforge3\\\\envs\\\\ars_autogui\\\\python.exe\" -m pip:*)",
+      "Bash(\"D:\\\\miniforge3\\\\envs\\\\ars_autogui\\\\python.exe\":*)",
+      "Bash(dir:*)",
+      "Bash(test:*)",
+      "Bash(\"D:/miniforge3/envs/ars_autogui/python.exe\" -m py_compile main.py)",
+      "Bash(\"D:/miniforge3/envs/ars_autogui/python.exe\":*)",
+      "Bash(pytest:*)",
+      "Bash(\"D:/miniforge3/envs/ars_autogui/python.exe\" -m pytest tests/test_config_manager.py -v)",
+      "Bash(D:/miniforge3/envs/ars_autogui/python.exe -m pytest tests/test_config_manager.py -v)",
+      "Bash(D:/miniforge3/envs/ars_autogui/python.exe:*)",
+      "Bash(timeout:*)",
+      "Bash(python:*)"
+    ]
+  }
+}
