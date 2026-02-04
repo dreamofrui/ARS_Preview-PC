@@ -56,6 +56,11 @@ class MainWindow(QMainWindow):
         # State
         self._showing_wait = False
 
+        # Countdown timer for timeout display
+        self._countdown_timer = QTimer(self)
+        self._countdown_timer.timeout.connect(self._update_countdown)
+        self._countdown_timer.start(100)  # Update every 100ms
+
         # Connect signals
         self._connect_signals()
 
@@ -300,6 +305,13 @@ class MainWindow(QMainWindow):
         self._start_btn.setEnabled(state == BatchState.IDLE)
         self._pause_btn.setEnabled(state == BatchState.RUNNING)
         self._stop_btn.setEnabled(state in [BatchState.RUNNING, BatchState.PAUSED])
+
+    def _update_countdown(self) -> None:
+        """Update countdown display"""
+        if self._batch.state == BatchState.RUNNING and self._timeout.is_active:
+            remaining = self._timeout.remaining
+            if remaining <= 5.0:  # Show countdown in last 5 seconds
+                self._update_status()
 
     def _on_start_clicked(self) -> None:
         """Handle start button clicked"""
