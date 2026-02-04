@@ -5,12 +5,15 @@ Independent popup window for displaying enlarged images
 
 from typing import Optional
 from PyQt6.QtWidgets import QDialog, QLabel, QVBoxLayout
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap, QKeyEvent
+from PyQt6.QtCore import Qt, pyqtSignal
 
 
 class BigImageDialog(QDialog):
     """Dialog for displaying enlarged image"""
+
+    # Signal to forward key presses to parent
+    key_pressed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -48,8 +51,13 @@ class BigImageDialog(QDialog):
         if self._label.pixmap():
             self.set_image(self._label.pixmap())
 
-    def keyPressEvent(self, event):
-        """Handle key press"""
-        if event.key() == Qt.Key.Key_Escape:
-            self.close()
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Handle key press - forward to parent for N/M keys"""
+        key = event.text()
+        if key in ['N', 'M', 'Enter', 'Esc']:
+            if key == 'Esc':
+                self.close()
+            else:
+                # Forward key press to parent
+                self.key_pressed.emit(key)
         super().keyPressEvent(event)

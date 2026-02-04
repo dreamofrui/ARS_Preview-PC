@@ -307,6 +307,9 @@ class MainWindow(QMainWindow):
 
         self._grid.update_images(pixmaps, current)
 
+        # Sync big dialog if visible
+        self._update_big_dialog()
+
     def _update_buttons(self) -> None:
         """Update button states"""
         state = self._batch.state
@@ -327,25 +330,14 @@ class MainWindow(QMainWindow):
         self._stop_btn.setEnabled(state in [BatchState.RUNNING, BatchState.PAUSED, BatchState.WAITING_CONFIRM])
 
     def _update_countdown(self) -> None:
-        """Update countdown display"""
+        """Update countdown display - always show when running"""
         if self._batch.state == BatchState.RUNNING and self._timeout.is_active:
-            remaining = self._timeout.remaining
-            if remaining <= 5.0:  # Show countdown in last 5 seconds
-                self._update_status()
+            self._update_status()  # Always update status when timeout is active
 
     def _on_start_clicked(self) -> None:
         """Handle start button clicked"""
-        # Get base count from combo
-        base_count = int(self._batch_combo.currentText())
-
-        # If base_count is 6 (default), use cycling mode (1,2,3,1,2,3,...)
-        # Otherwise use the fixed count the user selected
-        if base_count == 6:
-            # Cycling mode: batch_num 1->1, 2->2, 3->3, 4->1, 5->2, 6->3, ...
-            cycle_position = (self._batch.batch_num - 1) % 3
-            count = cycle_position + 1  # 1, 2, 3, 1, 2, 3, ...
-        else:
-            count = base_count
+        # Get batch count from combo - use exactly what user selected
+        count = int(self._batch_combo.currentText())
 
         self._batch.set_batch_count(count)
         self._batch.start_batch()
@@ -377,17 +369,29 @@ class MainWindow(QMainWindow):
         """Open big image dialog"""
         if self._big_dialog is None:
             self._big_dialog = BigImageDialog(self)
-        else:
-            self._big_dialog.show()
+            # Connect key press signal to handler
+            self._big_dialog.key_pressed.connect(self._on_big_dialog_key_press)
+        self._big_dialog.show()
 
-        # Get current image
-        current = self._batch.current_image - 1
-        if self._showing_wait:
-            pixmap = self._image_loader.get_wait_image()
-        else:
-            pixmap = self._image_loader.get_normal_image(current)
+        # Update image immediately
+        self._update_big_dialog()
 
-        self._big_dialog.set_image(pixmap)
+    def _on_big_dialog_key_press(self, key: str) -> None:
+        """Handle key press from big dialog"""
+        # Forward to key handler
+        self._key_handler.handle_key(key)
+
+    def _update_big_dialog(self) -> None:
+        """Update big dialog image if visible"""
+        if self._big_dialog and self._big_dialog.isVisible():
+            current = self._batch.current_image - 1
+            if self._showing_timeout and self._current_timeout_image:
+                pixmap = self._current_timeout_image
+            elif self._showing_wait:
+                pixmap = self._image_loader.get_wait_image()
+            else:
+                pixmap = self._image_loader.get_normal_image(current)
+            self._big_dialog.set_image(pixmap)
 
     def _set_image_mode(self, show_wait: bool) -> None:
         """Set image display mode"""
@@ -420,6 +424,8 @@ class MainWindow(QMainWindow):
         result = msg.exec()
         if result == QMessageBox.StandardButton.Yes:
             self._batch.confirm_batch()
+            # Auto-start next batch after confirming
+            self._on_start_clicked()
         else:
             self._batch.cancel_batch()
 
