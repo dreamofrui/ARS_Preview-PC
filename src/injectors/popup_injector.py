@@ -4,8 +4,8 @@ Injects distracting popup windows
 """
 
 import random
-from PyQt6.QtWidgets import QMessageBox, QWidget
-from PyQt6.QtCore import QPoint
+from PyQt6.QtWidgets import QMessageBox, QWidget, QApplication
+from PyQt6.QtCore import QPoint, QRect
 
 
 class PopupInjector:
@@ -43,11 +43,14 @@ class PopupInjector:
         msg.setIcon(QMessageBox.Icon.Warning)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
 
-        # Random position near parent window
-        if self._parent:
-            parent_geo = self._parent.geometry()
-            x = parent_geo.x() + random.randint(50, 200)
-            y = parent_geo.y() + random.randint(50, 200)
-            msg.move(QPoint(x, y))
+        # Center on screen
+        screen = QApplication.primaryScreen()
+        if screen:
+            screen_geo = screen.availableGeometry()
+            msg_size = msg.sizeHint()
+            x = (screen_geo.width() - msg_size.width()) // 2
+            y = (screen_geo.height() - msg_size.height()) // 2
+            msg.move(x, y)
 
-        msg.show()
+        msg.exec()
+

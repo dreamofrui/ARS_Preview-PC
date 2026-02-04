@@ -52,7 +52,8 @@ class GridImageLabel(QLabel):
 
     def mouseDoubleClickEvent(self, event):
         """Handle double click to open big image"""
-        self.parent().parent().open_big_image(self)
+        # self.parent() is GridWidget
+        self.parent().open_big_image(self)
         super().mouseDoubleClickEvent(event)
 
 
