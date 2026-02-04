@@ -32,7 +32,9 @@ class ConfigManager:
             "countdown_seconds": 5
         },
         "batch": {
-            "default_count": 6
+            "default_count": 6,
+            "cycling_enabled": False,
+            "cycling_sequence": "1,2,3,4,5,6"
         },
         "lag_duration": 3,
         "log_file": "",
