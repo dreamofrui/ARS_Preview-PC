@@ -54,9 +54,10 @@ class MainWindow(QMainWindow):
         self._big_dialog: Optional[BigImageDialog] = None
 
         # State
-        self._timed_out_indices = set()  # Track which image indices (0-based) have timed out in current batch
+        self._timed_out_indices = set()  # Track which GLOBAL image indices have timed out
         self._current_timeout_image = None  # Store current timeout image
         self._waiting_for_key_after_timeout = False  # True when timeout occurred, waiting for N/M key
+        self._batch_pixmaps = []  # Cache pixmaps for current batch
 
         # Countdown timer for timeout display
         self._countdown_timer = QTimer(self)
@@ -88,6 +89,19 @@ class MainWindow(QMainWindow):
         self._batch.batch_completed.connect(self._on_batch_completed)
         self._timeout.timeout_triggered.connect(self._on_timeout)
         self._key_handler.key_processed.connect(self._on_key_processed)
+        # Lag injector signals
+        self._lag_injector.lag_started.connect(self._on_lag_started)
+        self._lag_injector.lag_ended.connect(self._on_lag_ended)
+
+    def _on_lag_started(self) -> None:
+        """Handle lag injection started - UI is frozen but timeout continues"""
+        # Timeout timer continues running (don't stop it)
+        # Just update status to show lag state
+        self._update_status()
+
+    def _on_lag_ended(self) -> None:
+        """Handle lag injection ended"""
+        self._update_status()
 
     def _init_ui(self) -> None:
         """Initialize UI"""
@@ -264,13 +278,19 @@ class MainWindow(QMainWindow):
             count = self._image_loader.load_timeout_images(timeout_dir)
             self._logger.info(f"Loaded {count} timeout images")
 
-        # Apply window settings
-        if self._config.get('window.remember_position'):
-            x = self._config.get('window.last_x', 100)
-            y = self._config.get('window.last_y', 100)
-            w = self._config.get('window.last_width', 1280)
-            h = self._config.get('window.last_height', 720)
-            self.setGeometry(x, y, w, h)
+        # Auto-fit to screen available area (excluding taskbar)
+        screen = self.screen()
+        if screen:
+            available_geometry = screen.availableGeometry()
+            self.setGeometry(available_geometry)
+
+        # Apply window settings (disabled - auto-fit takes priority)
+        # if self._config.get('window.remember_position'):
+        #     x = self._config.get('window.last_x', 100)
+        #     y = self._config.get('window.last_y', 100)
+        #     w = self._config.get('window.last_width', 1280)
+        #     h = self._config.get('window.last_height', 720)
+        #     self.setGeometry(x, y, w, h)
 
         if self._config.get('window.always_on_top'):
             self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
@@ -286,10 +306,15 @@ class MainWindow(QMainWindow):
 
     def _on_image_changed(self, current: int, total: int) -> None:
         """Handle image change"""
+        print(f"[DEBUG] _on_image_changed: current={current}, total={total}, state={self._batch.state.value}")
         # Clear waiting flag (but keep timeout image visible)
         self._waiting_for_key_after_timeout = False
         self._update_display()
-        self._timeout.start()
+        # Only start timeout if not in waiting confirm state
+        if self._batch.state != BatchState.WAITING_CONFIRM:
+            self._timeout.start()
+        else:
+            self._timeout.stop()
 
     def _on_progress_updated(self, ok: int, ng: int) -> None:
         """Handle progress update"""
@@ -314,14 +339,9 @@ class MainWindow(QMainWindow):
 
     def _on_key_processed(self, detail: str) -> None:
         """Handle key processed"""
-        # If we were waiting after timeout, advance the image (counts as NG)
-        if self._waiting_for_key_after_timeout:
-            self._waiting_for_key_after_timeout = False
-            self._batch.process_timeout()
+        print(f"[DEBUG] _on_key_processed: waiting={self._waiting_for_key_after_timeout}, state={self._batch.state.value}")
         self._logger.log_key("", detail)
-        self._timeout.stop()
-        # Restart timeout for next image
-        self._timeout.start()
+        # Note: timeout timer restart is handled in _on_image_changed when image advances
 
     def _on_grid_image_clicked(self, index: int) -> None:
         """Handle grid image clicked"""
@@ -336,7 +356,17 @@ class MainWindow(QMainWindow):
         ok = self._batch.ok_count
         ng = self._batch.ng_count
 
-        if self._batch.state == BatchState.RUNNING and self._timeout.is_active:
+        # Check if in lag state
+        is_lagging = self._lag_injector._is_lagging
+
+        if is_lagging:
+            # Show lag state with timeout continuing
+            if self._timeout.is_active:
+                remaining = self._timeout.remaining
+                status = f"Batch {batch} | Image {current}/{total} | {state} [LAG] | OK:{ok} NG:{ng} | Timeout: {remaining:.1f}s"
+            else:
+                status = f"Batch {batch} | Image {current}/{total} | {state} [LAG] | OK:{ok} NG:{ng}"
+        elif self._batch.state == BatchState.RUNNING and self._timeout.is_active:
             remaining = self._timeout.remaining
             status = f"Batch {batch} | Image {current}/{total} | {state} | OK:{ok} NG:{ng} | Timeout: {remaining:.1f}s"
         else:
@@ -346,23 +376,18 @@ class MainWindow(QMainWindow):
         self._tray.set_tooltip(state)
 
     def _update_display(self) -> None:
-        """Update image display"""
+        """Update image display using cached pixmaps"""
         current = self._batch.current_image - 1  # Convert to 0-indexed
-        pixmaps = []
 
-        for i in range(self._batch.batch_count):
-            if i in self._timed_out_indices and self._current_timeout_image:
-                # Timed out images show timeout image
-                pixmaps.append(self._current_timeout_image)
-            elif i < current:
-                # Already processed - show normal image
-                pixmaps.append(self._image_loader.get_normal_image(i))
-            elif i == current:
-                # Current image
-                pixmaps.append(self._image_loader.get_normal_image(i))
-            else:
-                # Future images - show wait image
-                pixmaps.append(self._image_loader.get_wait_image())
+        # Use cached pixmaps (populated at batch start, with timeout updates applied)
+        if self._batch_pixmaps:
+            pixmaps = list(self._batch_pixmaps)  # Make a copy
+        else:
+            # Fallback: load images directly (shouldn't happen in normal flow)
+            pixmaps = []
+            for i in range(self._batch.batch_count):
+                global_index = self._batch.global_image_index + i
+                pixmaps.append(self._image_loader.get_normal_image(global_index))
 
         self._grid.update_images(pixmaps, current)
 
@@ -409,9 +434,22 @@ class MainWindow(QMainWindow):
         self._timed_out_indices.clear()
         self._current_timeout_image = None
         self._waiting_for_key_after_timeout = False
+
+        # Pre-load all images for this batch and cache them
+        self._batch_pixmaps = []
+        for i in range(self._batch.batch_count):
+            global_index = self._batch.global_image_index + i
+            pixmap = self._image_loader.get_normal_image(global_index)
+            # Use wait image as fallback if pixmap is None
+            if pixmap is None:
+                pixmap = self._image_loader.get_wait_image()
+            self._batch_pixmaps.append(pixmap)
+
+        # Update display with cached pixmaps
         self._update_display()
         self._timeout.start()
         self._logger.log_batch_start(self._batch.batch_num, count)
+        print(f"[DEBUG] _on_start_clicked: batch={self._batch.batch_num}, state={self._batch.state.value}")
 
     def _on_mode_changed(self, index: int) -> None:
         """Handle mode selection change"""
@@ -436,6 +474,7 @@ class MainWindow(QMainWindow):
         self._timed_out_indices.clear()
         self._current_timeout_image = None
         self._waiting_for_key_after_timeout = False
+        self._batch_pixmaps.clear()
 
     def _open_big_image(self) -> None:
         """Open big image dialog"""
@@ -457,19 +496,30 @@ class MainWindow(QMainWindow):
         """Update big dialog image if visible"""
         if self._big_dialog and self._big_dialog.isVisible():
             current = self._batch.current_image - 1
-            if current in self._timed_out_indices and self._current_timeout_image:
-                pixmap = self._current_timeout_image
+            # Use cached pixmaps to ensure consistency with grid display
+            if 0 <= current < len(self._batch_pixmaps):
+                pixmap = self._batch_pixmaps[current]
             else:
-                pixmap = self._image_loader.get_normal_image(current)
+                # Fallback if cache is not available
+                global_index = self._batch.global_image_index + current
+                pixmap = self._image_loader.get_normal_image(global_index)
+            # Fallback to wait image if pixmap is None
+            if pixmap is None:
+                pixmap = self._image_loader.get_wait_image()
             self._big_dialog.set_image(pixmap)
 
     def _show_timeout_image(self) -> None:
         """Show timeout replacement image"""
         pixmap = self._image_loader.get_random_timeout_image()
         self._current_timeout_image = pixmap
-        # Mark current image index as timed out (0-based)
-        current = self._batch.current_image - 1
-        self._timed_out_indices.add(current)
+        # Mark current GLOBAL image index as timed out
+        global_index = self._batch.global_image_index
+        self._timed_out_indices.add(global_index)
+
+        # Update cached pixmaps for this position
+        current_pos = self._batch.current_image - 1
+        if 0 <= current_pos < len(self._batch_pixmaps):
+            self._batch_pixmaps[current_pos] = pixmap
 
         # Update big dialog if visible
         if pixmap and self._big_dialog and self._big_dialog.isVisible():
@@ -480,6 +530,9 @@ class MainWindow(QMainWindow):
 
     def _show_batch_complete_dialog(self, batch_num: int, ok: int, ng: int) -> None:
         """Show batch complete dialog"""
+        # Stop timeout timer while showing dialog
+        self._timeout.stop()
+
         msg = QMessageBox(self)
         msg.setWindowTitle("Batch Complete")
         msg.setText(f"Batch {batch_num} completed. OK: {ok}, NG: {ng}. Confirm to proceed?")
@@ -491,10 +544,19 @@ class MainWindow(QMainWindow):
         result = msg.exec()
         if result == QMessageBox.StandardButton.Yes:
             self._batch.confirm_batch()
+            # Clear timeout states
+            self._timed_out_indices.clear()
+            self._current_timeout_image = None
+            self._waiting_for_key_after_timeout = False
             # Auto-start next batch after confirming
             self._on_start_clicked()
         else:
             self._batch.cancel_batch()
+            # Clear timeout states on cancel
+            self._timed_out_indices.clear()
+            self._current_timeout_image = None
+            self._waiting_for_key_after_timeout = False
+            self._batch_pixmaps.clear()
 
     def _inject_lag(self) -> None:
         """Inject lag"""
