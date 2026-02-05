@@ -66,7 +66,7 @@ pytest tests/ -v
 
 Run application:
 ```bash
-python main.py
+D:/miniforge3/envs/ars_autogui/python.exe main.py
 ```
 
 ## Building Executable

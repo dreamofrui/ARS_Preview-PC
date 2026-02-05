@@ -22,6 +22,7 @@ class KeyHandler(QObject):
         Returns True if key was processed
         """
         state = self._batch.state
+        print(f"[DEBUG] handle_key: key={key}, state={state.value}")
 
         # Priority 1: Waiting confirm (Enter/Esc only)
         if state == BatchState.WAITING_CONFIRM:
@@ -52,4 +53,5 @@ class KeyHandler(QObject):
                 self.key_processed.emit(f"M - {detail}")
                 return True
 
+        print(f"[DEBUG] handle_key: key NOT processed, state={state.value}")
         return False

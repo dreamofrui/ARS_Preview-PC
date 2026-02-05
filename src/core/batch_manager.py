@@ -30,7 +30,7 @@ class BatchManager(QObject):
         self._state = BatchState.IDLE
         self._batch_num = 0
         self._batch_count = 6
-        self._current_image = 0  # 0-indexed
+        self._current_image = 0  # 0-indexed position within current batch
         self._ok_count = 0
         self._ng_count = 0
         self._timeout_count = 0
@@ -38,6 +38,9 @@ class BatchManager(QObject):
         # Batch cycling mode
         self._use_cycling_sequence = False
         self._batch_sequence = [1, 2, 3, 4, 5, 6]  # Default sequence
+
+        # Global image index - tracks which image to show next across batches
+        self._global_image_index = 0  # 0-indexed position in the full image list
 
     @property
     def state(self) -> BatchState:
@@ -74,6 +77,11 @@ class BatchManager(QObject):
         """Get timeout count"""
         return self._timeout_count
 
+    @property
+    def global_image_index(self) -> int:
+        """Get global image index (for cycling through images across batches)"""
+        return self._global_image_index
+
     def set_batch_count(self, count: int) -> None:
         """Set batch size (0-6)"""
         self._batch_count = max(0, min(6, count))
@@ -102,6 +110,7 @@ class BatchManager(QObject):
         # Calculate batch count based on mode (fixed or cycling)
         self._batch_count = self._calculate_batch_count()
         self._set_state(BatchState.RUNNING)
+        # Emit signal with current batch-local index and global image index
         self.image_changed.emit(1, self._batch_count)
 
     def pause(self) -> None:
@@ -118,6 +127,7 @@ class BatchManager(QObject):
         """Stop batch processing"""
         self._batch_num = 0
         self._current_image = 0
+        self._global_image_index = 0  # Reset global index too
         self._ok_count = 0
         self._ng_count = 0
         self._timeout_count = 0
@@ -151,13 +161,26 @@ class BatchManager(QObject):
 
     def _advance_image(self) -> bool:
         """Advance to next image, return True if batch complete"""
+        import traceback
+        print(f"[ADVANCE] _advance_image called: current={self._current_image}, batch_count={self._batch_count}, global_index={self._global_image_index}")
+        print(f"[ADVANCE] Call stack:")
+        for line in traceback.format_stack()[-6:-1]:
+            print(f"  {line.strip()}")
+
+        # Prevent re-entry if already in waiting confirm state
+        if self._state == BatchState.WAITING_CONFIRM:
+            print(f"[ADVANCE] Skipping - already in WAITING_CONFIRM state")
+            return False
+
         self._current_image += 1
+        self._global_image_index += 1  # Advance global index for image cycling
         self.progress_updated.emit(self._ok_count, self._ng_count)
 
         if self._current_image >= self._batch_count:
-            # Batch complete
-            self.batch_completed.emit(self._batch_num, self._ok_count, self._ng_count)
+            # Batch complete - set state FIRST, then emit signal
+            print(f"[ADVANCE] Batch complete: current={self._current_image}, count={self._batch_count}")
             self._set_state(BatchState.WAITING_CONFIRM)
+            self.batch_completed.emit(self._batch_num, self._ok_count, self._ng_count)
             return False
 
         self.image_changed.emit(self._current_image + 1, self._batch_count)
@@ -174,8 +197,15 @@ class BatchManager(QObject):
         if self._state == BatchState.WAITING_CONFIRM:
             self._current_image = 0
             self._set_state(BatchState.IDLE)
+            # Reset global index since we're cancelling (not continuing)
+            self._global_image_index = 0
 
     def _set_state(self, new_state: BatchState) -> None:
         """Set new state and emit signal"""
+        import traceback
+        print(f"[STATE_CHANGE] {self._state.value} -> {new_state.value}")
+        print(f"[STATE_CHANGE] Call stack:")
+        for line in traceback.format_stack()[-6:-1]:
+            print(f"  {line.strip()}")
         self._state = new_state
         self.state_changed.emit(new_state.value)

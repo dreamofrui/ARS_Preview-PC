@@ -81,8 +81,10 @@ class ImageLoader(QObject):
         pixmap = QPixmap(str(path))
         if not pixmap.isNull():
             self._cache[path] = pixmap
+            return pixmap
 
-        return pixmap
+        # Return None if load failed
+        return None
 
     def get_wait_image(self) -> Optional[QPixmap]:
         """Get wait image"""
