@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QComboBox, QFrame, QMessageBox, QDialog, QLineEdit
+    QLabel, QPushButton, QComboBox, QFrame, QMessageBox, QDialog, QLineEdit, QSpinBox
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QKeyEvent, QPixmap
@@ -176,6 +176,16 @@ class MainWindow(QMainWindow):
         self._batch_combo.setCurrentIndex(6)  # Default to 6
         batch_row.addWidget(self._batch_combo)
 
+        # Total batch limit
+        batch_row.addSpacing(20)
+        batch_row.addWidget(QLabel("循环批次:"))
+        self._total_limit_spin = QSpinBox()
+        self._total_limit_spin.setMinimum(1)
+        self._total_limit_spin.setMaximum(999999)
+        self._total_limit_spin.setValue(999999)  # Default: unlimited
+        self._total_limit_spin.setToolTip("批次编号循环数量（图片序列继续往后）")
+        batch_row.addWidget(self._total_limit_spin)
+
         # Mode selection
         batch_row.addSpacing(20)
         batch_row.addWidget(QLabel("模式:"))
@@ -298,6 +308,11 @@ class MainWindow(QMainWindow):
         # Load batch count
         self._timeout.set_default_duration(self._config.get('timeout.default_duration', 10))
 
+        # Load total batch limit
+        total_limit = self._config.get('batch.total_batch_limit', 999999)
+        self._total_limit_spin.setValue(total_limit)
+        self._batch.set_total_batch_limit(total_limit)
+
     def _on_state_changed(self, state: str) -> None:
         """Handle state change"""
         self._logger.log_state_change(self._status_label.text(), state)
@@ -322,8 +337,10 @@ class MainWindow(QMainWindow):
 
     def _on_batch_completed(self, batch_num: int, ok: int, ng: int) -> None:
         """Handle batch completion"""
-        self._logger.log_batch_complete(batch_num, ok, ng)
-        self._show_batch_complete_dialog(batch_num, ok, ng)
+        display_num = self._batch.display_batch_num  # Use display number for cycling
+        self._logger.log_batch_complete(display_num, ok, ng)
+        # Pass real batch_num to check if we've completed a cycle
+        self._show_batch_complete_dialog(display_num, ok, ng, batch_num)
 
     def _on_timeout(self) -> None:
         """Handle timeout - show timeout image and wait for key press"""
@@ -344,13 +361,22 @@ class MainWindow(QMainWindow):
         # Note: timeout timer restart is handled in _on_image_changed when image advances
 
     def _on_grid_image_clicked(self, index: int) -> None:
-        """Handle grid image clicked"""
-        self._open_big_image()
+        """Handle grid image clicked
+
+        In IDLE state: shows the clicked image.
+        In other states: shows the current processing image.
+        """
+        if self._batch.state == BatchState.IDLE:
+            # In IDLE state, show the clicked image
+            self._open_big_image(index)
+        else:
+            # In other states, show current processing image
+            self._open_big_image()
 
     def _update_status(self) -> None:
         """Update status bar"""
         state = self._batch.state.value
-        batch = self._batch.batch_num
+        batch = self._batch.display_batch_num  # Use display_batch_num for cycling display
         current = self._batch.current_image
         total = self._batch.batch_count
         ok = self._batch.ok_count
@@ -428,6 +454,11 @@ class MainWindow(QMainWindow):
         # Get batch count from combo - use exactly what user selected
         count = int(self._batch_combo.currentText())
 
+        # Apply total batch limit from user setting
+        limit = self._total_limit_spin.value()
+        print(f"[DEBUG] Setting total_batch_limit to {limit}")
+        self._batch.set_total_batch_limit(limit)
+
         self._batch.set_batch_count(count)
         self._batch.start_batch()
         # Reset all states for new batch
@@ -444,6 +475,11 @@ class MainWindow(QMainWindow):
             if pixmap is None:
                 pixmap = self._image_loader.get_wait_image()
             self._batch_pixmaps.append(pixmap)
+
+        # Fill remaining slots with wait image (always show 6 images total)
+        wait_image = self._image_loader.get_wait_image()
+        while len(self._batch_pixmaps) < 6:
+            self._batch_pixmaps.append(wait_image)
 
         # Update display with cached pixmaps
         self._update_display()
@@ -476,32 +512,50 @@ class MainWindow(QMainWindow):
         self._waiting_for_key_after_timeout = False
         self._batch_pixmaps.clear()
 
-    def _open_big_image(self) -> None:
-        """Open big image dialog"""
+    def _open_big_image(self, index: int = None) -> None:
+        """Toggle big image dialog visibility
+
+        Args:
+            index: Optional specific image index (0-5) to display.
+                   If None, displays current image.
+        """
         if self._big_dialog is None:
             self._big_dialog = BigImageDialog(self)
             # Connect key press signal to handler
             self._big_dialog.key_pressed.connect(self._on_big_dialog_key_press)
-        self._big_dialog.show()
 
-        # Update image immediately
-        self._update_big_dialog()
+        # Toggle visibility
+        if self._big_dialog.isVisible():
+            self._big_dialog.hide()
+        else:
+            self._big_dialog.show()
+            # Update image immediately
+            self._update_big_dialog(index)
 
     def _on_big_dialog_key_press(self, key: str) -> None:
         """Handle key press from big dialog"""
         # Forward to key handler
         self._key_handler.handle_key(key)
 
-    def _update_big_dialog(self) -> None:
-        """Update big dialog image if visible"""
+    def _update_big_dialog(self, index: int = None) -> None:
+        """Update big dialog image if visible
+
+        Args:
+            index: Optional specific image index (0-5). If None, use current image.
+        """
         if self._big_dialog and self._big_dialog.isVisible():
-            current = self._batch.current_image - 1
+            # Use provided index or default to current image
+            if index is not None:
+                target_index = index
+            else:
+                target_index = self._batch.current_image - 1
+
             # Use cached pixmaps to ensure consistency with grid display
-            if 0 <= current < len(self._batch_pixmaps):
-                pixmap = self._batch_pixmaps[current]
+            if 0 <= target_index < len(self._batch_pixmaps):
+                pixmap = self._batch_pixmaps[target_index]
             else:
                 # Fallback if cache is not available
-                global_index = self._batch.global_image_index + current
+                global_index = self._batch.global_image_index + target_index
                 pixmap = self._image_loader.get_normal_image(global_index)
             # Fallback to wait image if pixmap is None
             if pixmap is None:
@@ -528,35 +582,35 @@ class MainWindow(QMainWindow):
         # Update grid to show timeout image
         self._update_display()
 
-    def _show_batch_complete_dialog(self, batch_num: int, ok: int, ng: int) -> None:
-        """Show batch complete dialog"""
+    def _show_batch_complete_dialog(self, batch_num: int, ok: int, ng: int, real_batch_num: int) -> None:
+        """Show batch complete dialog
+
+        Args:
+            batch_num: Display batch number (cycles based on total_batch_limit)
+            ok: OK count
+            ng: NG count
+            real_batch_num: Real batch number (1, 2, 3, 4, ...)
+        """
         # Stop timeout timer while showing dialog
         self._timeout.stop()
 
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Batch Complete")
-        msg.setText(f"Batch {batch_num} completed. OK: {ok}, NG: {ng}. Confirm to proceed?")
-        msg.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+        # Check if we've reached the cycle limit (this is the LAST batch in the cycle)
+        # When display_batch_num equals total_batch_limit and real_batch_num is at the limit
+        is_last_in_cycle = (self._batch.display_batch_num >= self._batch._total_batch_limit)
 
-        result = msg.exec()
-        if result == QMessageBox.StandardButton.Yes:
+        # At cycle limit (last batch completed): no dialog, directly enter IDLE state and show wait.png
+        if is_last_in_cycle:
             self._batch.confirm_batch()
-            # Clear timeout states
             self._timed_out_indices.clear()
             self._current_timeout_image = None
             self._waiting_for_key_after_timeout = False
-            # Auto-start next batch after confirming
-            self._on_start_clicked()
+            # Fill with wait images and update display
+            wait_image = self._image_loader.get_wait_image()
+            self._batch_pixmaps = [wait_image] * 6
+            self._update_display()
         else:
-            self._batch.cancel_batch()
-            # Clear timeout states on cancel
-            self._timed_out_indices.clear()
-            self._current_timeout_image = None
-            self._waiting_for_key_after_timeout = False
-            self._batch_pixmaps.clear()
+            # Normal: show dialog to confirm proceeding to next batch
+            self._show_confirm_dialog(batch_num, ok, ng)
 
     def _inject_lag(self) -> None:
         """Inject lag"""
@@ -578,10 +632,67 @@ class MainWindow(QMainWindow):
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press"""
-        key = event.text()
-        if key in ['N', 'M', 'Enter', 'Esc']:
+        key = event.text().upper()  # Convert to uppercase for case-insensitive matching
+        if key in ['N', 'M', 'ENTER', 'ESC']:
             self._key_handler.handle_key(key)
         super().keyPressEvent(event)
+
+    def _show_confirm_dialog(self, batch_num: int, ok: int, ng: int) -> None:
+        """Show confirmation dialog"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Batch Complete")
+        msg.setText(f"Batch {batch_num} completed. OK: {ok}, NG: {ng}. Confirm to proceed?")
+        msg.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+
+        # Set window to stay on top so user can see it even with big image open
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+
+        # Show dialog and get result
+        result = msg.exec()
+
+        # Handle result
+        if result == QMessageBox.StandardButton.Yes:
+            self._batch.confirm_batch()
+            # Clear timeout states
+            self._timed_out_indices.clear()
+            self._current_timeout_image = None
+            self._waiting_for_key_after_timeout = False
+            # Auto-start next batch after confirming
+            self._on_start_clicked()
+        else:
+            self._batch.cancel_batch()
+            # Clear timeout states on cancel
+            self._timed_out_indices.clear()
+            self._current_timeout_image = None
+            self._waiting_for_key_after_timeout = False
+            # Fill with wait images and update display
+            wait_image = self._image_loader.get_wait_image()
+            self._batch_pixmaps = [wait_image] * 6
+            self._update_display()
+
+    def _on_confirm_dialog_finished(self, result: int, ok: int, ng: int) -> None:
+        """Handle confirmation dialog result"""
+        if result == QMessageBox.StandardButton.Yes.value:
+            self._batch.confirm_batch()
+            # Clear timeout states
+            self._timed_out_indices.clear()
+            self._current_timeout_image = None
+            self._waiting_for_key_after_timeout = False
+            # Auto-start next batch after confirming
+            self._on_start_clicked()
+        else:
+            self._batch.cancel_batch()
+            # Clear timeout states on cancel
+            self._timed_out_indices.clear()
+            self._current_timeout_image = None
+            self._waiting_for_key_after_timeout = False
+            # Fill with wait images and update display
+            wait_image = self._image_loader.get_wait_image()
+            self._batch_pixmaps = [wait_image] * 6
+            self._update_display()
 
     def closeEvent(self, event):
         """Handle close event"""

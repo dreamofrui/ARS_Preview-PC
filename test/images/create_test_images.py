@@ -73,19 +73,27 @@ def create_timeout_images():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     messages = [
-        "Timeout - Image took too long",
-        "Slow connection - Retrying...",
-        "Camera timeout - Please wait",
-        "Image loading timeout",
-        "Sensor timeout - Check connection"
+        "Image took too long-Timeout",
+        "Slow connection - Retrying...-Timeout",
+        "Camera timeout - Please wait-Timeout",
+        "Image loading timeout-Timeout",
+        "Sensor timeout-Check conn-Timeout"
     ]
 
+    # colors = [
+    #     (60, 40, 40),
+    #     (40, 60, 40),
+    #     (40, 40, 60),
+    #     (60, 60, 40),
+    #     (60, 40, 60)
+    # ]
+
     colors = [
-        (60, 40, 40),
-        (40, 60, 40),
-        (40, 40, 60),
-        (60, 60, 40),
-        (60, 40, 60)
+        (40, 40, 40),
+        (40, 40, 40),
+        (40, 40, 40),
+        (40, 40, 40),
+        (40, 40, 40)
     ]
 
     for i, (msg, color) in enumerate(zip(messages, colors)):
@@ -114,7 +122,7 @@ def create_timeout_images():
 
 
 if __name__ == "__main__":
-    create_normal_images()
-    create_wait_image()
+    # create_normal_images()
+    # create_wait_image()
     create_timeout_images()
     print("\nAll test images created successfully!")

@@ -39,6 +39,9 @@ class BatchManager(QObject):
         self._use_cycling_sequence = False
         self._batch_sequence = [1, 2, 3, 4, 5, 6]  # Default sequence
 
+        # Total batch limit for cycling display number
+        self._total_batch_limit = 999999  # Default: unlimited
+
         # Global image index - tracks which image to show next across batches
         self._global_image_index = 0  # 0-indexed position in the full image list
 
@@ -81,6 +84,19 @@ class BatchManager(QObject):
     def global_image_index(self) -> int:
         """Get global image index (for cycling through images across batches)"""
         return self._global_image_index
+
+    @property
+    def display_batch_num(self) -> int:
+        """Get display batch number (cycles based on total_batch_limit)"""
+        print(f"[DEBUG] display_batch_num: _batch_num={self._batch_num}, _total_batch_limit={self._total_batch_limit}")
+        if self._total_batch_limit <= 0:
+            return self._batch_num
+        return ((self._batch_num - 1) % self._total_batch_limit) + 1
+
+    def set_total_batch_limit(self, limit: int) -> None:
+        """Set total batch limit for cycling display number"""
+        self._total_batch_limit = max(1, limit)
+        print(f"[DEBUG] set_total_batch_limit: _total_batch_limit set to {self._total_batch_limit}")
 
     def set_batch_count(self, count: int) -> None:
         """Set batch size (0-6)"""

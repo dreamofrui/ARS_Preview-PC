@@ -4,7 +4,7 @@ Independent popup window for displaying enlarged images
 """
 
 from typing import Optional
-from PyQt6.QtWidgets import QDialog, QLabel, QVBoxLayout
+from PyQt6.QtWidgets import QDialog, QLabel, QVBoxLayout, QSizePolicy
 from PyQt6.QtGui import QPixmap, QKeyEvent
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -17,8 +17,9 @@ class BigImageDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Review PC - Image Viewer")
+        self.setWindowTitle("Review PC - Image Viewer (按 ESC 关闭)")
         self.setMinimumSize(800, 600)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._label = QLabel()
         self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -27,11 +28,7 @@ class BigImageDialog(QDialog):
         layout.addWidget(self._label)
         self.setLayout(layout)
 
-        # Always stay on top
-        self.setWindowFlags(
-            self.windowFlags() |
-            Qt.WindowType.WindowStaysOnTopHint
-        )
+        # Remove WindowStaysOnTopHint so main window buttons remain clickable
 
     def set_image(self, pixmap: Optional[QPixmap]) -> None:
         """Set image to display"""
@@ -53,9 +50,9 @@ class BigImageDialog(QDialog):
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press - forward to parent for N/M keys"""
-        key = event.text()
-        if key in ['N', 'M', 'Enter', 'Esc']:
-            if key == 'Esc':
+        key = event.text().upper()  # Convert to uppercase for case-insensitive matching
+        if key in ['N', 'M', 'ENTER', 'ESC']:
+            if key == 'ESC':
                 self.close()
             else:
                 # Forward key press to parent
