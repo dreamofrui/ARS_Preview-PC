@@ -1,0 +1,30 @@
+{
+  "images": {
+    "normal_dir": "D:\\code\\vscode_code\\ARS_Preview-PC\\test\\images\\normal",
+    "wait_image": "D:\\code\\vscode_code\\ARS_Preview-PC\\test\\images\\wait.png",
+    "timeout_dir": "D:\\code\\vscode_code\\ARS_Preview-PC\\test\\images\\timeout"
+  },
+  "window": {
+    "remember_position": true,
+    "always_on_top": false,
+    "last_x": 0,
+    "last_y": -8,
+    "last_width": 1920,
+    "last_height": 1017
+  },
+  "timeout": {
+    "default_duration": 10,
+    "show_countdown": true,
+    "countdown_seconds": 5
+  },
+  "batch": {
+    "default_count": 6
+  },
+  "lag_duration": 3,
+  "log_file": "",
+  "report_dir": "",
+  "tray": {
+    "enabled": true,
+    "minimize_to_tray": true
+  }
+}
