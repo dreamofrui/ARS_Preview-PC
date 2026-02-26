@@ -17,7 +17,7 @@ class BigImageDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Review PC - Image Viewer (按 ESC 关闭)")
+        self.setWindowTitle("Full size image")
         self.setMinimumSize(800, 600)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 

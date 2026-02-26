@@ -6,8 +6,9 @@
 **安装包或者库原则**：安装任何包或库之前，先使用 `pip show <package_name>` 检查是否已安装，未安装时再执行安装。
 
 ## 重要原则## 
-严格遵守 /superpowers 的开发流程，用户每次需求即使只有1%的可能与superpowers的技能契合，也要调用相关superpowers技能。
-- 每次使用 /superopwers某个skills时, 告知用户当前在使用 superpowers的 “XX” 技能，XX为具体使用的技能
+严格遵守 /superpowers 的开发流程，睿少每次需求即使只有1%的可能与superpowers的技能契合，也要调用相关superpowers技能。
+- 每次使用 /superopwers某个技能, 告知睿少当前在使用 superpowers的 “XX” 技能，XX为具体使用的技能
+-如未应用 /superpowers的某个技能，也告知睿少本次并未使用superpowers技能。
 
 ## 文档即上下文（默认必须引用）​
 处理任何需求前，先阅读并遵循这些文件（如不存在则创建）：​

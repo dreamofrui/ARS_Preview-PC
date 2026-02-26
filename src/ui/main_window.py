@@ -32,7 +32,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Review PC")
+        self.setWindowTitle("Review PC for Jupiter Ver 1.3.7 <0067407>")
         self.setMinimumSize(800, 600)
         self.resize(1280, 720)
 
@@ -640,7 +640,7 @@ class MainWindow(QMainWindow):
     def _show_confirm_dialog(self, batch_num: int, ok: int, ng: int) -> None:
         """Show confirmation dialog"""
         msg = QMessageBox(self)
-        msg.setWindowTitle("Batch Complete")
+        msg.setWindowTitle("ReviewPC_G6 1.3.7")
         msg.setText(f"Batch {batch_num} completed. OK: {ok}, NG: {ng}. Confirm to proceed?")
         msg.setStandardButtons(
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No

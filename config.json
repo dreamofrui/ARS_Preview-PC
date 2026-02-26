@@ -1,8 +1,8 @@
 {
   "images": {
-    "normal_dir": "D:\\code\\vscode_code\\ARS_Preview-PC\\test\\images\\normal",
-    "wait_image": "D:\\code\\vscode_code\\ARS_Preview-PC\\test\\images\\wait.png",
-    "timeout_dir": "D:\\code\\vscode_code\\ARS_Preview-PC\\test\\images\\timeout"
+    "normal_dir": "./test/images/normal",
+    "wait_image": "./test/images/wait.png",
+    "timeout_dir": "./test/images/timeout"
   },
   "window": {
     "remember_position": true,

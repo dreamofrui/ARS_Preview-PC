@@ -11,13 +11,16 @@ from PyQt6.QtCore import QPoint, QRect
 class PopupInjector:
     """Injects distracting popup windows"""
 
+    # TITLES = [
+    #     "License Warning",
+    #     "System Alert",
+    #     "Connection Lost",
+    #     "Update Available",
+    #     "Storage Full",
+    #     "Memory Warning"
+    # ]
     TITLES = [
-        "License Warning",
-        "System Alert",
-        "Connection Lost",
-        "Update Available",
-        "Storage Full",
-        "Memory Warning"
+        "ReviewPC_G6 1.3.7"
     ]
 
     MESSAGES = [

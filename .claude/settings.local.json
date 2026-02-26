@@ -15,7 +15,21 @@
       "Bash(D:/miniforge3/envs/ars_autogui/python.exe -m pytest tests/test_config_manager.py -v)",
       "Bash(D:/miniforge3/envs/ars_autogui/python.exe:*)",
       "Bash(timeout:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(git worktree add:*)",
+      "Bash(pip install:*)",
+      "Bash(\"D:\\\\miniforge3\\\\envs\\\\ars_autogui\\\\python.exe\" -c \"from src.ui.main_window import MainWindow; print\\(''Import OK''\\)\")",
+      "Bash(\"D:\\\\miniforge3\\\\envs\\\\ars_autogui\\\\python.exe\" -c \"from src.core.batch_manager import BatchManager; from src.config.config_manager import ConfigManager; print\\(''Core modules import OK''\\)\")",
+      "Bash(\"D:\\\\miniforge3\\\\envs\\\\ars_autogui\\\\python.exe\" -c \"from src.core.batch_manager import BatchManager; from src.config.config_manager import ConfigManager; from src.ui.main_window import MainWindow; print\\(''All imports successful''\\)\")",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(git merge:*)",
+      "Bash(\"D:\\\\miniforge3\\\\envs\\\\ars_autogui\\\\python.exe\" -c \"from src.ui.main_window import MainWindow; print\\(''Merge verification: OK''\\)\")",
+      "Bash(git branch:*)",
+      "Bash(git worktree:*)",
+      "Bash(\"D:\\\\miniforge3\\\\envs\\\\ars_autogui\\\\python.exe\" -c \"from src.ui.main_window import MainWindow; print\\(''Verification: OK''\\)\")",
+      "Bash(\"D:\\\\miniforge3\\\\envs\\\\ars_autogui\\\\python.exe\" -c \"from src.ui.main_window import MainWindow; from src.core.key_handler import KeyHandler; print\\(''Verification: OK''\\)\")",
+      "Bash(findstr:*)"
     ]
   }
 }
